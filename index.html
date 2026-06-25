@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>enessozen</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: #FFF0F5; /* Açık Pembe Arka Plan */
+        }
+        /* Ekran Genel Tasarımları */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            background-color: #FFF0F5;
+            padding: 20px;
+            text-align: center;
+        }
+        /* Başlangıç ve Bitiş Kutuları */
+        .box {
+            background: white;
+            padding: 30px 20px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            max-width: 85%;
+            width: 300px;
+        }
+        .box p {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .btn {
+            background-color: #FF69B4; /* Canlı Pembe */
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* Oyun Alanı */
+        #gameArea {
+            display: none;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background-color: #FFF0F5;
+        }
+        /* Skor ve Süre Paneli */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: white;
+            padding: 10px 25px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            text-align: center;
+            font-weight: bold;
+            color: #C71585;
+            font-size: 16px;
+            z-index: 5;
+            line-height: 1.5;
+        }
+        /* Enes Kutusu (Oyuncu) */
+        #player {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #FFF0F5;
+            color: #FF69B4;
+            border: 2px solid #FFE4E1;
+            padding: 10px 25px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 10px rgba(255,105,180,0.2);
+            touch-action: none;
+            z-index: 4;
+        }
+        /* Düşen Objeler */
+        .falling-item {
+            position: absolute;
+            font-size: 32px;
+            pointer-events: none;
+            z-index: 3;
+        }
+        /* Kaybetme Ekranı Linkleri */
+        .lose-text {
+            font-size: 24px;
+            font-weight: bold;
+            color: #FF1493;
+            margin-bottom: 15px;
+        }
+        .sub-link {
+            font-size: 16px;
+            color: #555;
+            text-decoration: none;
+            background: #FFE4E1;
+            padding: 8px 15px;
+            border-radius: 10px;
+            display: inline-block;
+            margin-bottom: 25px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="startScreen" class="screen">
+        <div class="box">
+            <p>surekli aciktigin icin...</p>
+            <button class="btn" onclick="startGame()">Başla 🤗</button>
+        </div>
+    </div>
+
+    <div id="gameArea">
+        <div id="hud">
+            ⏱️ Süre: <span id="timeLeft">60</span><br>
+            ⭐ Skor: <span id="score">0</span>
+        </div>
+        <div id="player">ENES</div>
+    </div>
+
+    <div id="loseScreen" class="screen" style="display: none;">
+        <div class="box">
+            <div class="lose-text">AHANAHANSHKAK</div>
+            <a class="sub-link" href="https://youtu.be/nkvGMBcKM58?si=iFC66NMQMPjITy2A" target="_blank">senin masumluk🥺 (tıkla)</a>
+            <br>
+            <button class="btn" onclick="resetGame()">Tekrar Dene</button>
+        </div>
+    </div>
+
+    <div id="winScreen" class="screen" style="display: none;">
+        <div class="box">
+            <p>dunyanin en kokay oyunuydu.</p>
+            <button class="btn" onclick="resetGame()">Tekrar Oyna</button>
+        </div>
+    </div>
+
+    <script>
+        const startScreen = document.getElementById('startScreen');
+        const gameArea = document.getElementById('gameArea');
+        const loseScreen = document.getElementById('loseScreen');
+        const winScreen = document.getElementById('winScreen');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score');
+        const timeLeftDisplay = document.getElementById('timeLeft');
+
+        let score = 0;
+        let timeLeft = 60;
+        let gameInterval;
+        let itemInterval;
+        let isPlaying = false;
+        let speedMultiplier = 1;
+
+        // Emojiler
+        const goodItems = ['🍔', '🍣', '🍵'];
+        const badItems = ['💀', '😈'];
+
+        // Oyuncuyu Sürükleme (Telefonlar İçin Dokunmatik Kontrol)
+        player.addEventListener('touchmove', (e) => {
+            if (!isPlaying) return;
+            let touch = e.touches[0];
+            let areaRect = gameArea.getBoundingClientRect();
+            let newLeft = touch.clientX - areaRect.left - (player.offsetWidth / 2);
+            
+            // Ekran dışına taşmayı önleme
+            if (newLeft < 0) newLeft = 0;
+            if (newLeft > areaRect.width - player.offsetWidth) newLeft = areaRect.width - player.offsetWidth;
+            
+            player.style.left = newLeft + 'px';
+            player.style.transform = 'none'; // Merkezlemeyi bozmamak için
+        });
+
+        // Oyunu Başlat
+        function startGame() {
+            startScreen.style.display = 'none';
+            loseScreen.style.display = 'none';
+            winScreen.style.display = 'none';
+            gameArea.style.display = 'block';
+            
+            score = 0;
+            timeLeft = 60;
+            speedMultiplier = 1;
+            isPlaying = true;
+            
+            scoreDisplay.innerText = score;
+            timeLeftDisplay.innerText = timeLeft;
+            player.style.left = '50%';
+            player.style.transform = 'translateX(-50%)';
+
+            // Mevcut eski objeleri temizle
+            document.querySelectorAll('.falling-item').forEach(item => item.remove());
+
+            // Zaman Sayacı
+            gameInterval = setInterval(() => {
+                timeLeft--;
+                timeLeftDisplay.innerText = timeLeft;
+
+                // Süre azaldıkça oyun kademeli olarak hızlanır
+                if (timeLeft === 45) speedMultiplier = 1.3;
+                if (timeLeft === 30) speedMultiplier = 1.6;
+                if (timeLeft === 15) speedMultiplier = 2.0;
+
+                if (timeLeft <= 0) {
+                    endGame(true);
+                }
+            }, 1000);
+
+            // Obje Yağmuru Başlat
+            spawnLoop();
+        }
+
+        // Dinamik Obje Üretici Kontrolü
+        function spawnLoop() {
+            if (!isPlaying) return;
+            spawnItem();
+            // Oyun hızlandıkça objelerin gelme sıklığı da artar
+            let nextSpawn = Math.random() * (1000 - 400) + 400; 
+            itemInterval = setTimeout(spawnLoop, nextSpawn / speedMultiplier);
+        }
+
+        // Obje Oluşturma Mantığı
+        function spawnItem() {
+            const item = document.createElement('div');
+            item.classList.add('falling-item');
+
+            // Engel çıkma olasılığı: Süre azaldıkça engellerin çıkma olasılığı biraz artar ama aşırı olmaz
+            let isBad = false;
+            let spawnChance = Math.random();
+            let badThreshold = timeLeft > 30 ? 0.15 : 0.25; // Son 30 saniyede engeller hafifçe artar
+
+            if (spawnChance < badThreshold) {
+                isBad = true;
+                item.innerText = badItems[Math.floor(Math.random() * badItems.length)];
+                item.dataset.type = 'bad';
+            } else {
+                let chosenGood = goodItems[Math.floor(Math.random() * goodItems.length)];
+                item.innerText = chosenGood;
+                item.dataset.type = chosenGood === '🍵' ? 'matcha' : 'good';
+            }
+
+            // Rastgele yatay konum
+            let areaWidth = gameArea.offsetWidth;
+            item.style.left = Math.random() * (areaWidth - 40) + 'px';
+            item.style.top = '-50px';
+            gameArea.appendChild(item);
+
+            // Düşme Animasyonu
+            let posY = -50;
+            let fallSpeed = (Math.random() * (4 - 2) + 2) * speedMultiplier;
+
+            function fall() {
+                if (!isPlaying) {
+                    item.remove();
+                    return;
+                }
+                posY += fallSpeed;
+                item.style.top = posY + 'px';
+
+                // Çarpışma Kontrolü
+                if (checkCollision(player, item)) {
+                    if (item.dataset.type === 'bad') {
+                        endGame(false); // Engellere basarsa kaybeder
+                    } else if (item.dataset.type === 'matcha') {
+                        score += 4; // Matcha 4 puan
+                        scoreDisplay.innerText = score;
+                    } else {
+                        score += 2; // Hamburger ve Sushi 2 puan
+                        scoreDisplay.innerText = score;
+                    }
+                    item.remove();
+                    return;
+                }
+
+                // Ekrandan çıkınca sil
+                if (posY > gameArea.offsetHeight) {
+                    item.remove();
+                } else {
+                    requestAnimationFrame(fall);
+                }
+            }
+            requestAnimationFrame(fall);
+        }
+
+        // AABB Çarpışma Testi
+        function checkCollision(rect1, rect2) {
+            let r1 = rect1.getBoundingClientRect();
+            let r2 = rect2.getBoundingClientRect();
+
+            return !(r1.right < r2.left || 
+                     r1.left > r2.right || 
+                     r1.bottom < r2.top || 
+                     r1.top > r2.bottom);
+        }
+
+        // Oyunu Bitirme (Kazanma / Kaybetme)
+        function endGame(isWin) {
+            isPlaying = false;
+            clearInterval(gameInterval);
+            clearTimeout(itemInterval);
+            gameArea.style.display = 'none';
+
+            if (isWin) {
+                winScreen.style.display = 'flex';
+                triggerConfetti();
+            } else {
+                loseScreen.style.display = 'flex';
+            }
+        }
+
+        // Yeniden Başlatma Butonları İçin
+        function resetGame() {
+            startGame();
+        }
+
+        // Konfeti Efekti Fonksiyonu
+        function triggerConfetti() {
+            var duration = 3 * 1000;
+            var end = Date.now() + duration;
+
+            (function frame() {
+                confetti({
+                    particleCount: 3,
+                    angle: 60,
+                    spread: 55,
+                    origin: { x: 0 },
+                    colors: ['#FF69B4', '#FFB6C1', '#FFF']
+                });
+                confetti({
+                    particleCount: 3,
+                    angle: 120,
+                    spread: 55,
+                    origin: { x: 1 },
+                    colors: ['#FF69B4', '#FFB6C1', '#FFF']
+                });
+
+                if (Date.now() < end) {
+                    requestAnimationFrame(frame);
+                }
+            }());
+        }
+    </script>
+</body>
+</html>
